@@ -4,6 +4,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::Stdio;
 
 fn parse_args() -> HashMap<String, String> {
     let mut args: Vec<String> = env::args().collect();
@@ -124,6 +125,11 @@ fn main() {
 
     println!("{:?}", args);
 
-    Command::new(program).args(args).output().expect("failed to execute process");
+    Command::new(program)
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("failed to execute process");
 }
 
