@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::env;
-use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -72,14 +71,20 @@ fn get_cover(args: &HashMap<String, String>) -> Option<PathBuf> {
         return None;
     }
 
-    for entry in fs::read_dir(directory.unwrap()).unwrap() {
-        let entry = entry.unwrap().path();
-        if entry.is_file() {
-            let file_name = entry.file_name().unwrap();
-            if file_name == "cover.jpg" || file_name == "cover.png" {
-                return Some(entry.to_owned());
-            }
-        }
+    let directory = directory.unwrap();
+
+    let mut cover = PathBuf::from(directory);
+    cover.push("cover.jpg");
+
+    if cover.exists() {
+        return Some(cover);
+    }
+
+    let mut cover = PathBuf::from(directory);
+    cover.push("cover.png");
+
+    if cover.exists() {
+        return Some(cover);
     }
 
     return None;
@@ -122,8 +127,6 @@ fn main() {
             args.push("-appIcon");
             args.push(c)
         });
-
-    println!("{:?}", args);
 
     Command::new(program)
         .args(args)
