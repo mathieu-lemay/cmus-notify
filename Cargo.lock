@@ -1,0 +1,4 @@
+[[package]]
+name = "cmus-notify-rust"
+version = "0.1.0"
+
