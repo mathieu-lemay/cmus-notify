@@ -1,125 +1,180 @@
-use std::collections::HashMap;
 use std::env;
+use std::io::Read;
+use std::io::Write;
+use std::net::Shutdown;
+use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
-fn parse_args() -> HashMap<String, String> {
-    let mut args: Vec<String> = env::args().collect();
-    let mut map: HashMap<String, String> = HashMap::new();
-
-    args.remove(0);
-    for i in 0..args.len() / 2 {
-        map.insert(args[i*2].to_owned(), args[i*2+1].to_owned());
-    }
-
-    return map;
+#[derive(Default)]
+struct Metadata {
+    file: String,
+    artist: String,
+    album: String,
+    title: String,
+    tracknumber: u8,
+    discnumber: u8,
+    date: String,
+    duration: u32,
+    position: u32,
+    status: String,
 }
 
-fn format_track(args: &HashMap<String, String>) -> String {
-    let discnumber = args.get("discnumber");
-    let tracknumber = args.get("tracknumber");
-
-    if discnumber.is_some() {
-        return format!("disc {}, track {}", discnumber.unwrap(), tracknumber.unwrap());
-    } else {
-        return format!("track {}", tracknumber.unwrap());
-    }
-}
-
-fn format_time(nb_sec_str: &String) -> String {
-    let mut sec: i32 = nb_sec_str.parse().unwrap();
-    let mut min: i32;
-    let mut hour: i32 = 0;
-
-    min = sec / 60;
-    sec = sec % 60;
-
-    if min > 60 {
-        hour = min / 60;
-        min = min % 60;
-    }
-
-    if hour != 0 {
-        return format!("{:02}:{:02}:{:02}", hour, min, sec);
-    } else {
-        return format!("{:02}:{:02}", min, sec);
-    }
-}
-
-fn format_position(args: &HashMap<String, String>) -> Option<String> {
-    let duration = args.get("duration");
-    let position = args.get("position");
-
-    if duration.is_none() {
-        return None;
-    }
-
-    if position.is_some() {
-        return Some(format!("{} / {}", format_time(position.unwrap()), format_time(duration.unwrap())));
-    } else {
-        return Some(format_time(duration.unwrap()));
-    }
-}
-
-fn get_cover(args: &HashMap<String, String>) -> Option<PathBuf> {
-    let file_path = Path::new(&args["file"]);
-    let directory = file_path.parent();
-
-    if directory.is_none() {
-        return None;
-    }
-
-    let directory = directory.unwrap();
-
-    let mut cover = PathBuf::from(directory);
-    cover.push("cover.jpg");
-
-    if cover.exists() {
-        return Some(cover);
-    }
-
-    let mut cover = PathBuf::from(directory);
-    cover.push("cover.png");
-
-    if cover.exists() {
-        return Some(cover);
-    }
-
-    return None;
-}
-
-fn main() {
-    let args = parse_args();
-
-    let title: String;
-    let mut body: String;
-
-    if args["status"] == "playing" {
-        title = format!("{} - {}", args["artist"], args["title"]);
-        body = format!("{}\n{}", args["album"], format_track(&args));
-
-        let position = format_position(&args);
-
-        if position.is_some() {
-            body.push_str(&format!(", {}", position.unwrap()));
+impl Metadata {
+    fn get_title(&self) -> String {
+        if self.artist != "" && self.album != "" {
+            return format!("{} - {}", self.artist, self.title);
+        } else {
+            return String::from("C* Music Player");
         }
-    } else if args["status"] == "paused" {
-        title = String::from("C* Music Player");
-        body = String::from("Paused");
-    } else if args["status"] == "stopped" {
-        title = String::from("C* Music Player");
-        body = String::from("Stopped");
-    } else {
-        title = String::from("C* Music Player");
-        body = args["status"].to_owned();
     }
 
-    let cover = get_cover(&args);
+    fn get_message(&self) -> String {
+        let mut body = format!("{}{}\n{}", self.album, self.get_status(), self.get_track());
 
+        let duration = self.get_duration();
+
+        match duration {
+            Some(s) => body.push_str(&format!(", {}", s)),
+            None => ()
+        };
+
+        return body;
+    }
+
+    fn get_cover(&self) -> Option<PathBuf> {
+        if self.file == "" {
+            return None;
+        }
+
+        let file_path = Path::new(&self.file);
+        let directory = file_path.parent();
+
+        if directory.is_none() {
+            return None;
+        }
+
+        let directory = directory.unwrap();
+
+        let mut cover = PathBuf::from(directory);
+        cover.push("cover.jpg");
+
+        if cover.exists() {
+            return Some(cover);
+        }
+
+        let mut cover = PathBuf::from(directory);
+        cover.push("cover.png");
+
+        if cover.exists() {
+            return Some(cover);
+        }
+
+        return None;
+    }
+
+    fn get_status(&self) -> String {
+        match self.status.as_str() {
+            "playing" => String::from(""),
+            "paused" => String::from(" [Paused]"),
+            "stopped" => String::from(" [Stopped]"),
+            _ => String::from(""),
+        }
+    }
+
+    fn get_track(&self) -> String {
+        if self.discnumber > 0 {
+            return format!("disc {}, track {}", self.discnumber, self.tracknumber);
+        } else {
+            return format!("track {}", self.tracknumber);
+        }
+    }
+
+    fn get_duration(&self) -> Option<String> {
+        if self.duration == 0 {
+            return None;
+        }
+
+        if self.position > 0 {
+            return Some(format!("{} / {}", format_time(self.position), format_time(self.duration)));
+        } else {
+            return Some(format_time(self.duration));
+        }
+    }
+}
+
+fn send(sock: &mut UnixStream, msg: &String) {
+    let bc = match sock.write(msg.as_bytes()) {
+        Ok(bc) => bc,
+        Err(e) => {
+            panic!("Error writing to socket: {:?}", e)
+        }
+    };
+
+    if bc != msg.len() {
+        panic!("Error writing to socket",);
+    }
+}
+
+fn recv(sock: &mut UnixStream) -> String {
+    const BUFSIZE: usize = 2048;
+    let mut buf: [u8; BUFSIZE] = [0; BUFSIZE];
+    let mut resp = String::new();
+
+    loop {
+        let bc = match sock.read(&mut buf) {
+            Ok(v) => v,
+            Err(e) => {
+                panic!("Error reading from socket: {:?}", e)
+            }
+        };
+
+        let chunk = String::from_utf8(buf[..bc].to_vec()).unwrap();
+        resp.push_str(chunk.as_str());
+
+        if chunk.ends_with("\n\n") {
+            break;
+        }
+    }
+
+    return resp;
+}
+
+fn parse(data: &String) -> Metadata {
+    let mut m: Metadata = Metadata::default();
+
+    for line in data.lines() {
+        let line: Vec<&str> = line.splitn(2, ' ').collect();
+        match line[0] {
+            "status" => m.status = String::from(line[1]),
+            "file" => m.file = String::from(line[1]),
+            "duration" => m.duration = line[1].parse().unwrap(),
+            "position" => m.position = line[1].parse().unwrap(),
+            "tag" => {
+                let tag: Vec<&str> = line[1].splitn(2, ' ').collect();
+
+                match tag[0] {
+                    "title" => m.title = String::from(tag[1]),
+                    "artist" => m.artist = String::from(tag[1]),
+                    "album" => m.album = String::from(tag[1]),
+                    "date" => m.date = String::from(tag[1]),
+                    "tracknumber" => m.tracknumber = tag[1].parse().unwrap(),
+                    "discnumber" => m.discnumber = tag[1].parse().unwrap(),
+                    _ => {}
+                };
+            }
+            _ => {}
+        }
+    }
+
+    return m;
+}
+
+fn notify(title: &String, msg: &String, cover: Option<PathBuf>) {
     let program = "terminal-notifier";
-    let mut args = vec!["-group", "cmus", "-title", &title, "-message", &body];
+    let mut args = vec!["-group", "cmus", "-title", title, "-message", msg];
 
     cover.as_ref()
         .and_then(|c| c.to_str())
@@ -136,3 +191,44 @@ fn main() {
         .expect("failed to execute process");
 }
 
+fn format_time(sec: u32) -> String {
+    let mut sec = sec;
+    let mut min: u32;
+    let mut hour: u32 = 0;
+
+    min = sec / 60;
+    sec = sec % 60;
+
+    if min > 60 {
+        hour = min / 60;
+        min = min % 60;
+    }
+
+    if hour != 0 {
+        return format!("{:02}:{:02}:{:02}", hour, min, sec);
+    } else {
+        return format!("{:02}:{:02}", min, sec);
+    }
+}
+
+fn main() {
+    let mut socket_path = env::home_dir().expect("Unable to get home dir");
+    socket_path.push(".config");
+    socket_path.push("cmus");
+    socket_path.push("socket");
+
+    let mut sock = match UnixStream::connect(socket_path) {
+        Ok(sock) => sock,
+        Err(_) => {
+            panic!("C* Music Player not running");
+        }
+    };
+
+    send(&mut sock, &String::from("status\n"));
+    let response = recv(&mut sock);
+    sock.shutdown(Shutdown::Both).expect("Unable to shutdown socket");
+
+    let m = parse(&response);
+
+    notify(&m.get_title(), &m.get_message(), m.get_cover());
+}
