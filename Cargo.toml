@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["Mathieu Lemay <acidrain1@gmail.com>"]
 
 [dependencies]
+dirs = "1.0.4"

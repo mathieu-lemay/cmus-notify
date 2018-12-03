@@ -1,4 +1,3 @@
-use std::env;
 use std::io::Read;
 use std::io::Write;
 use std::net::Shutdown;
@@ -7,6 +6,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
+
+extern crate dirs;
 
 #[derive(Default)]
 struct Metadata {
@@ -212,7 +213,7 @@ fn format_time(sec: u32) -> String {
 }
 
 fn main() {
-    let mut socket_path = env::home_dir().expect("Unable to get home dir");
+    let mut socket_path = dirs::home_dir().expect("Unable to get home dir");
     socket_path.push(".config");
     socket_path.push("cmus");
     socket_path.push("socket");
