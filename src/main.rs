@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+use std::env;
 use std::io::Read;
 use std::io::Write;
 use std::net::Shutdown;
@@ -6,8 +8,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
-
-extern crate dirs;
 
 #[derive(Default)]
 struct Metadata {
@@ -173,6 +173,34 @@ fn parse(data: &String) -> Metadata {
     return m;
 }
 
+#[cfg(target_os = "linux")]
+fn notify(title: &String, msg: &String, cover: Option<PathBuf>) {
+    let program = "notify-send";
+    let mut args = vec!["--hint=int:transient:1"];
+
+    args.push("--icon");
+    if cover.is_some() {
+        cover.as_ref()
+            .and_then(|c| c.to_str())
+            .map(|c| {
+                args.push(c)
+            });
+    } else {
+        args.push("applications-multimedia");
+    }
+
+    args.push(title);
+    args.push(msg);
+
+    Command::new(program)
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("failed to execute process");
+}
+
+#[cfg(target_os = "macos")]
 fn notify(title: &String, msg: &String, cover: Option<PathBuf>) {
     let program = "terminal-notifier";
     let mut args = vec!["-group", "cmus", "-title", title, "-message", msg];
@@ -190,6 +218,29 @@ fn notify(title: &String, msg: &String, cover: Option<PathBuf>) {
         .stderr(Stdio::null())
         .spawn()
         .expect("failed to execute process");
+}
+
+#[cfg(target_os = "linux")]
+fn get_socket_path() -> PathBuf {
+    let mut socket_path: PathBuf;
+
+    match env::var("XDG_RUNTIME_DIR") {
+        Ok(val) => socket_path = PathBuf::from(val),
+        Err(_) => panic!("XDG_RUNTIME_DIR not set")
+    }
+    socket_path.push("cmus-socket");
+
+    return socket_path;
+}
+
+#[cfg(target_os = "macos")]
+fn get_socket_path() -> PathBuf {
+    let mut socket_path = dirs::home_dir().expect("Unable to get home dir");
+    socket_path.push(".config");
+    socket_path.push("cmus");
+    socket_path.push("socket");
+
+    return socket_path;
 }
 
 fn format_time(sec: u32) -> String {
@@ -213,12 +264,7 @@ fn format_time(sec: u32) -> String {
 }
 
 fn main() {
-    let mut socket_path = dirs::home_dir().expect("Unable to get home dir");
-    socket_path.push(".config");
-    socket_path.push("cmus");
-    socket_path.push("socket");
-
-    let mut sock = match UnixStream::connect(socket_path) {
+    let mut sock = match UnixStream::connect(get_socket_path()) {
         Ok(sock) => sock,
         Err(_) => {
             panic!("C* Music Player not running");
