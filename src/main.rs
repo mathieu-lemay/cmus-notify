@@ -267,7 +267,8 @@ fn main() {
     let mut sock = match UnixStream::connect(get_socket_path()) {
         Ok(sock) => sock,
         Err(_) => {
-            panic!("C* Music Player not running");
+            notify(&String::from("C* Music Player"), &String::from("Not running"), None);
+            return;
         }
     };
 
