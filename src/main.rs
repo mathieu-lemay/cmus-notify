@@ -26,9 +26,9 @@ struct Metadata {
 impl Metadata {
     fn get_title(&self) -> String {
         if self.artist != "" && self.album != "" {
-            return format!("{} - {}", self.artist, self.title);
+            format!("{} - {}", self.artist, self.title)
         } else {
-            return String::from("C* Music Player");
+            String::from("C* Music Player")
         }
     }
 
@@ -37,12 +37,11 @@ impl Metadata {
 
         let duration = self.get_duration();
 
-        match duration {
-            Some(s) => body.push_str(&format!(", {}", s)),
-            None => (),
+        if let Some(s) = duration {
+            body.push_str(&format!(", {}", s))
         };
 
-        return body;
+        body
     }
 
     fn get_cover(&self) -> Option<PathBuf> {
@@ -51,13 +50,7 @@ impl Metadata {
         }
 
         let file_path = Path::new(&self.file);
-        let directory = file_path.parent();
-
-        if directory.is_none() {
-            return None;
-        }
-
-        let directory = directory.unwrap();
+        let directory = file_path.parent()?;
 
         let mut cover = PathBuf::from(directory);
         cover.push("cover.jpg");
@@ -73,7 +66,7 @@ impl Metadata {
             return Some(cover);
         }
 
-        return None;
+        None
     }
 
     fn get_status(&self) -> String {
@@ -87,9 +80,9 @@ impl Metadata {
 
     fn get_track(&self) -> String {
         if self.discnumber > 0 {
-            return format!("disc {}, track {}", self.discnumber, self.tracknumber);
+            format!("disc {}, track {}", self.discnumber, self.tracknumber)
         } else {
-            return format!("track {}", self.tracknumber);
+            format!("track {}", self.tracknumber)
         }
     }
 
@@ -99,18 +92,18 @@ impl Metadata {
         }
 
         if self.position > 0 {
-            return Some(format!(
+            Some(format!(
                 "{} / {}",
                 format_time(self.position),
                 format_time(self.duration)
-            ));
+            ))
         } else {
-            return Some(format_time(self.duration));
+            Some(format_time(self.duration))
         }
     }
 }
 
-fn send(sock: &mut UnixStream, msg: &String) {
+fn send(sock: &mut UnixStream, msg: &str) {
     let bc = match sock.write(msg.as_bytes()) {
         Ok(bc) => bc,
         Err(e) => panic!("Error writing to socket: {:?}", e),
@@ -140,10 +133,10 @@ fn recv(sock: &mut UnixStream) -> String {
         }
     }
 
-    return resp;
+    resp
 }
 
-fn parse(data: &String) -> Metadata {
+fn parse(data: &str) -> Metadata {
     let mut m: Metadata = Metadata::default();
 
     for line in data.lines() {
@@ -170,20 +163,19 @@ fn parse(data: &String) -> Metadata {
         }
     }
 
-    return m;
+    m
 }
 
 #[cfg(target_os = "linux")]
-fn notify(title: &String, msg: &String, cover: Option<PathBuf>) {
+fn notify(title: &str, msg: &str, cover: Option<PathBuf>) {
     let program = "notify-send";
     let mut args = vec!["--hint=int:transient:1"];
 
     args.push("--icon");
     if cover.is_some() {
-        cover
-            .as_ref()
-            .and_then(|c| c.to_str())
-            .map(|c| args.push(c));
+        if let Some(c) = cover.as_ref().and_then(|c| c.to_str()) {
+            args.push(c);
+        }
     } else {
         args.push("applications-multimedia");
     }
@@ -223,11 +215,11 @@ fn get_socket_path() -> PathBuf {
 
     match env::var("XDG_RUNTIME_DIR") {
         Ok(val) => socket_path = PathBuf::from(val),
-        Err(_) => panic!("XDG_RUNTIME_DIR not set"),
+        Err(e) => panic!("Error getting XDG_RUNTIME_DIR envvar: {:?}", e),
     }
     socket_path.push("cmus-socket");
 
-    return socket_path;
+    socket_path
 }
 
 #[cfg(target_os = "macos")]
@@ -237,7 +229,7 @@ fn get_socket_path() -> PathBuf {
     socket_path.push("cmus");
     socket_path.push("socket");
 
-    return socket_path;
+    socket_path
 }
 
 fn format_time(sec: u32) -> String {
@@ -246,17 +238,17 @@ fn format_time(sec: u32) -> String {
     let mut hour: u32 = 0;
 
     min = sec / 60;
-    sec = sec % 60;
+    sec %= 60;
 
     if min > 60 {
         hour = min / 60;
-        min = min % 60;
+        min %= 60;
     }
 
     if hour != 0 {
-        return format!("{:02}:{:02}:{:02}", hour, min, sec);
+        format!("{:02}:{:02}:{:02}", hour, min, sec)
     } else {
-        return format!("{:02}:{:02}", min, sec);
+        format!("{:02}:{:02}", min, sec)
     }
 }
 
