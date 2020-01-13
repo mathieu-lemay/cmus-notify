@@ -39,7 +39,7 @@ impl Metadata {
 
         match duration {
             Some(s) => body.push_str(&format!(", {}", s)),
-            None => ()
+            None => (),
         };
 
         return body;
@@ -99,7 +99,11 @@ impl Metadata {
         }
 
         if self.position > 0 {
-            return Some(format!("{} / {}", format_time(self.position), format_time(self.duration)));
+            return Some(format!(
+                "{} / {}",
+                format_time(self.position),
+                format_time(self.duration)
+            ));
         } else {
             return Some(format_time(self.duration));
         }
@@ -109,9 +113,7 @@ impl Metadata {
 fn send(sock: &mut UnixStream, msg: &String) {
     let bc = match sock.write(msg.as_bytes()) {
         Ok(bc) => bc,
-        Err(e) => {
-            panic!("Error writing to socket: {:?}", e)
-        }
+        Err(e) => panic!("Error writing to socket: {:?}", e),
     };
 
     if bc != msg.len() {
@@ -127,9 +129,7 @@ fn recv(sock: &mut UnixStream) -> String {
     loop {
         let bc = match sock.read(&mut buf) {
             Ok(v) => v,
-            Err(e) => {
-                panic!("Error reading from socket: {:?}", e)
-            }
+            Err(e) => panic!("Error reading from socket: {:?}", e),
         };
 
         let chunk = String::from_utf8(buf[..bc].to_vec()).unwrap();
@@ -180,11 +180,10 @@ fn notify(title: &String, msg: &String, cover: Option<PathBuf>) {
 
     args.push("--icon");
     if cover.is_some() {
-        cover.as_ref()
+        cover
+            .as_ref()
             .and_then(|c| c.to_str())
-            .map(|c| {
-                args.push(c)
-            });
+            .map(|c| args.push(c));
     } else {
         args.push("applications-multimedia");
     }
@@ -205,12 +204,10 @@ fn notify(title: &String, msg: &String, cover: Option<PathBuf>) {
     let program = "terminal-notifier";
     let mut args = vec!["-group", "cmus", "-title", title, "-message", msg];
 
-    cover.as_ref()
-        .and_then(|c| c.to_str())
-        .map(|c| {
-            args.push("-appIcon");
-            args.push(c)
-        });
+    cover.as_ref().and_then(|c| c.to_str()).map(|c| {
+        args.push("-appIcon");
+        args.push(c)
+    });
 
     Command::new(program)
         .args(args)
@@ -226,7 +223,7 @@ fn get_socket_path() -> PathBuf {
 
     match env::var("XDG_RUNTIME_DIR") {
         Ok(val) => socket_path = PathBuf::from(val),
-        Err(_) => panic!("XDG_RUNTIME_DIR not set")
+        Err(_) => panic!("XDG_RUNTIME_DIR not set"),
     }
     socket_path.push("cmus-socket");
 
@@ -267,14 +264,19 @@ fn main() {
     let mut sock = match UnixStream::connect(get_socket_path()) {
         Ok(sock) => sock,
         Err(_) => {
-            notify(&String::from("C* Music Player"), &String::from("Not running"), None);
+            notify(
+                &String::from("C* Music Player"),
+                &String::from("Not running"),
+                None,
+            );
             return;
         }
     };
 
     send(&mut sock, &String::from("status\n"));
     let response = recv(&mut sock);
-    sock.shutdown(Shutdown::Both).expect("Unable to shutdown socket");
+    sock.shutdown(Shutdown::Both)
+        .expect("Unable to shutdown socket");
 
     let m = parse(&response);
 

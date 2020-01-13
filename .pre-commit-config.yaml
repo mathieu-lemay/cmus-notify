@@ -1,0 +1,12 @@
+repos:
+  - repo: https://github.com/mathieu-lemay/pre-commit-rust
+    rev: master
+    hooks:
+      - id: fmt
+      - id: cargo-check
+      - id: clippy
+  - repo: https://github.com/prettier/prettier
+    rev: master
+    hooks:
+      - id: prettier
+# vim: ts=2 sw=2
