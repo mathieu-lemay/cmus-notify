@@ -1,4 +1,3 @@
-#[cfg(target_os = "linux")]
 use std::env;
 use std::io::Read;
 use std::io::Write;
@@ -6,8 +5,8 @@ use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Command;
-use std::process::Stdio;
+
+use notify_rust::{Notification, NotificationHint};
 
 #[derive(Default)]
 struct Metadata {
@@ -166,47 +165,25 @@ fn parse(data: &str) -> Metadata {
     m
 }
 
-#[cfg(target_os = "linux")]
 fn notify(title: &str, msg: &str, cover: Option<PathBuf>) {
-    let program = "notify-send";
-    let mut args = vec!["--hint=int:transient:1"];
-
-    args.push("--icon");
+    let icon;
     if cover.is_some() {
         if let Some(c) = cover.as_ref().and_then(|c| c.to_str()) {
-            args.push(c);
+            icon = c;
+        } else {
+            icon = "applications-multimedia";
         }
     } else {
-        args.push("applications-multimedia");
+        icon = "applications-multimedia";
     }
 
-    args.push(title);
-    args.push(msg);
-
-    Command::new(program)
-        .args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("failed to execute process");
-}
-
-#[cfg(target_os = "macos")]
-fn notify(title: &String, msg: &String, cover: Option<PathBuf>) {
-    let program = "terminal-notifier";
-    let mut args = vec!["-group", "cmus", "-title", title, "-message", msg];
-
-    cover.as_ref().and_then(|c| c.to_str()).map(|c| {
-        args.push("-appIcon");
-        args.push(c)
-    });
-
-    Command::new(program)
-        .args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("failed to execute process");
+    Notification::new()
+        .summary(title)
+        .body(msg)
+        .icon(icon)
+        .hint(NotificationHint::Transient(true))
+        .show()
+        .expect("Error showing notification.");
 }
 
 #[cfg(target_os = "linux")]
