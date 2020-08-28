@@ -5,7 +5,10 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::path::PathBuf;
 
-use notify_rust::{Hint, Notification};
+use notify_rust::Notification;
+
+#[cfg(target_os = "linux")]
+use notify_rust::Hint;
 
 #[derive(Default)]
 struct Metadata {
@@ -165,22 +168,36 @@ fn parse(data: &str) -> Metadata {
 }
 
 fn notify(title: &str, msg: &str, cover: Option<PathBuf>) {
-    let icon;
-    if cover.is_some() {
+    let icon = if cover.is_some() {
         if let Some(c) = cover.as_ref().and_then(|c| c.to_str()) {
-            icon = c;
+            c
         } else {
-            icon = "applications-multimedia";
+            "applications-multimedia"
         }
     } else {
-        icon = "applications-multimedia";
-    }
+        "applications-multimedia"
+    };
 
+    send_notification(title, msg, icon);
+}
+
+#[cfg(target_os = "linux")]
+fn send_notification(title: &str, msg: &str, icon: &str) {
     Notification::new()
         .summary(title)
         .body(msg)
         .icon(icon)
         .hint(Hint::Transient(true))
+        .show()
+        .expect("Error showing notification.");
+}
+
+#[cfg(target_os = "macos")]
+fn send_notification(title: &str, msg: &str, icon: &str) {
+    Notification::new()
+        .summary(title)
+        .body(msg)
+        .icon(icon)
         .show()
         .expect("Error showing notification.");
 }
