@@ -1,4 +1,3 @@
-use std::env;
 use std::io::Read;
 use std::io::Write;
 use std::net::Shutdown;
@@ -6,7 +5,7 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::path::PathBuf;
 
-use notify_rust::{Notification, NotificationHint};
+use notify_rust::{Hint, Notification};
 
 #[derive(Default)]
 struct Metadata {
@@ -181,32 +180,27 @@ fn notify(title: &str, msg: &str, cover: Option<PathBuf>) {
         .summary(title)
         .body(msg)
         .icon(icon)
-        .hint(NotificationHint::Transient(true))
+        .hint(Hint::Transient(true))
         .show()
         .expect("Error showing notification.");
 }
 
-#[cfg(target_os = "linux")]
-fn get_socket_path() -> PathBuf {
-    let mut socket_path: PathBuf;
+fn get_socket_path() -> Option<PathBuf> {
+    if let Some(mut path) = dirs::runtime_dir() {
+        path.push("cmus_socket");
 
-    match env::var("XDG_RUNTIME_DIR") {
-        Ok(val) => socket_path = PathBuf::from(val),
-        Err(e) => panic!("Error getting XDG_RUNTIME_DIR envvar: {:?}", e),
+        return Some(path);
     }
-    socket_path.push("cmus-socket");
 
-    socket_path
-}
+    if let Some(mut path) = dirs::home_dir() {
+        path.push(".config");
+        path.push("cmus");
+        path.push("socket");
 
-#[cfg(target_os = "macos")]
-fn get_socket_path() -> PathBuf {
-    let mut socket_path = dirs::home_dir().expect("Unable to get home dir");
-    socket_path.push(".config");
-    socket_path.push("cmus");
-    socket_path.push("socket");
+        return Some(path);
+    }
 
-    socket_path
+    None
 }
 
 fn format_time(sec: u32) -> String {
@@ -230,7 +224,19 @@ fn format_time(sec: u32) -> String {
 }
 
 fn main() {
-    let mut sock = match UnixStream::connect(get_socket_path()) {
+    let socket_path = match get_socket_path() {
+        Some(p) => p,
+        None => {
+            notify(
+                &String::from("C* Music Player"),
+                &String::from("Unable to determine socket path"),
+                None,
+            );
+            return;
+        }
+    };
+
+    let mut sock = match UnixStream::connect(socket_path) {
         Ok(sock) => sock,
         Err(_) => {
             notify(

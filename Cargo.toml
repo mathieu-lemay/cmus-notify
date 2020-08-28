@@ -1,9 +1,9 @@
 [package]
 name = "cmus-notify"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Mathieu Lemay <acidrain1@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-dirs = "2"
-notify-rust = "3"
+dirs = "^3.0"
+notify-rust = "^4.0"
