@@ -204,7 +204,7 @@ fn send_notification(title: &str, msg: &str, icon: &str) {
 
 fn get_socket_path() -> Option<PathBuf> {
     if let Some(mut path) = dirs::runtime_dir() {
-        path.push("cmus_socket");
+        path.push("cmus-socket");
 
         return Some(path);
     }
