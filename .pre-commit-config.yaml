@@ -9,4 +9,5 @@ repos:
     rev: master
     hooks:
       - id: prettier
+        exclude: README.md
 # vim: ts=2 sw=2
