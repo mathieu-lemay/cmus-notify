@@ -26,7 +26,7 @@ struct Metadata {
 
 impl Metadata {
     fn get_title(&self) -> String {
-        if self.artist != "" && self.album != "" {
+        if !self.artist.is_empty() && !self.album.is_empty() {
             format!("{} - {}", self.artist, self.title)
         } else {
             String::from("C* Music Player")
@@ -46,7 +46,7 @@ impl Metadata {
     }
 
     fn get_cover(&self) -> Option<PathBuf> {
-        if self.file == "" {
+        if self.file.is_empty() {
             return None;
         }
 
@@ -222,10 +222,9 @@ fn get_socket_path() -> Option<PathBuf> {
 
 fn format_time(sec: u32) -> String {
     let mut sec = sec;
-    let mut min: u32;
+    let mut min = sec / 60;
     let mut hour: u32 = 0;
 
-    min = sec / 60;
     sec %= 60;
 
     if min > 60 {
