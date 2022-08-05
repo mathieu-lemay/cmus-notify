@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::io::Read;
 use std::io::Write;
 use std::net::Shutdown;
@@ -26,7 +27,7 @@ struct Metadata {
 
 impl Metadata {
     fn get_title(&self) -> String {
-        if !self.artist.is_empty() && !self.album.is_empty() {
+        if !self.artist.is_empty() && !self.title.is_empty() {
             format!("{} - {}", self.artist, self.title)
         } else {
             String::from("C* Music Player")
@@ -39,7 +40,8 @@ impl Metadata {
         let duration = self.get_duration();
 
         if let Some(s) = duration {
-            body.push_str(&format!(", {}", s))
+            // TODO: Handle properly.
+            write!(body, ", {}", s).expect("Unable to add duration to message");
         };
 
         body
@@ -272,4 +274,65 @@ fn main() {
     let m = parse(&response);
 
     notify(&m.get_title(), &m.get_message(), m.get_cover());
+}
+
+#[cfg(test)]
+mod test_metadata {
+    use super::Metadata;
+
+    #[test]
+    fn test_get_title() {
+        let meta = Metadata {
+            artist: String::from("L'Artist"),
+            title: String::from("Le Title"),
+            ..Default::default()
+        };
+
+        assert_eq!(meta.get_title(), String::from("L'Artist - Le Title"))
+    }
+
+    #[test]
+    fn test_get_title_fallback_when_info_is_missing() {
+        for (artist, title) in vec![
+            (String::new(), String::new()),
+            (String::from("L'artist"), String::new()),
+            (String::new(), String::from("Le Title")),
+        ] {
+            let meta = Metadata {
+                artist,
+                title,
+                ..Default::default()
+            };
+
+            assert_eq!(meta.get_title(), String::from("C* Music Player"))
+        }
+    }
+
+    #[test]
+    fn test_get_message_without_duration() {
+        let meta = Metadata {
+            album: String::from("L'Album"),
+            status: String::from("paused"),
+            tracknumber: 1,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            meta.get_message(),
+            String::from("L'Album [Paused]\ntrack 1")
+        )
+    }
+
+    #[test]
+    fn test_get_message_with_duration() {
+        let meta = Metadata {
+            album: String::from("L'Album"),
+            status: String::from("playing"),
+            tracknumber: 2,
+            duration: 123,
+            ..Default::default()
+        };
+
+        assert_eq!(meta.get_message(), String::from("L'Album\ntrack 2, 02:03"))
+    }
 }
