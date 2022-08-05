@@ -5,5 +5,5 @@ authors = ["Mathieu Lemay <acidrain1@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-dirs = "^3.0"
+dirs = "4.0"
 notify-rust = "^4.0"
