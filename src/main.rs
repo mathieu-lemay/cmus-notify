@@ -11,7 +11,7 @@ use notify_rust::Notification;
 #[cfg(target_os = "linux")]
 use notify_rust::Hint;
 
-#[derive(Default)]
+#[derive(Debug, Eq, PartialEq, Default)]
 struct Metadata {
     file: String,
     artist: String,
@@ -82,10 +82,14 @@ impl Metadata {
     }
 
     fn get_track(&self) -> String {
-        if self.discnumber > 0 {
-            format!("disc {}, track {}", self.discnumber, self.tracknumber)
+        if self.tracknumber > 0 {
+            if self.discnumber > 0 {
+                format!("disc {}, track {}", self.discnumber, self.tracknumber)
+            } else {
+                format!("track {}", self.tracknumber)
+            }
         } else {
-            format!("track {}", self.tracknumber)
+            String::new()
         }
     }
 
@@ -229,7 +233,7 @@ fn format_time(sec: u32) -> String {
 
     sec %= 60;
 
-    if min > 60 {
+    if min >= 60 {
         hour = min / 60;
         min %= 60;
     }
@@ -245,11 +249,7 @@ fn main() {
     let socket_path = match get_socket_path() {
         Some(p) => p,
         None => {
-            notify(
-                &String::from("C* Music Player"),
-                &String::from("Unable to determine socket path"),
-                None,
-            );
+            notify("C* Music Player", "Unable to determine socket path", None);
             return;
         }
     };
@@ -257,16 +257,12 @@ fn main() {
     let mut sock = match UnixStream::connect(socket_path) {
         Ok(sock) => sock,
         Err(_) => {
-            notify(
-                &String::from("C* Music Player"),
-                &String::from("Not running"),
-                None,
-            );
+            notify("C* Music Player", "Not running", None);
             return;
         }
     };
 
-    send(&mut sock, &String::from("status\n"));
+    send(&mut sock, "status\n");
     let response = recv(&mut sock);
     sock.shutdown(Shutdown::Both)
         .expect("Unable to shutdown socket");
@@ -279,60 +275,205 @@ fn main() {
 #[cfg(test)]
 mod test_metadata {
     use super::Metadata;
+    use rstest::rstest;
 
-    #[test]
-    fn test_get_title() {
+    #[rstest]
+    #[case::no_artist_no_title("", "", "C* Music Player")]
+    #[case::artist_only("L'artist", "", "C* Music Player")]
+    #[case::title_only("", "Le Title", "C* Music Player")]
+    #[case::title_and_artist("L'artist", "Le Title", "L'artist - Le Title")]
+    fn test_get_title(#[case] artist: String, #[case] title: String, #[case] expected: String) {
         let meta = Metadata {
-            artist: String::from("L'Artist"),
-            title: String::from("Le Title"),
+            artist,
+            title,
             ..Default::default()
         };
 
-        assert_eq!(meta.get_title(), String::from("L'Artist - Le Title"))
+        assert_eq!(meta.get_title(), expected)
     }
 
     #[test]
-    fn test_get_title_fallback_when_info_is_missing() {
-        for (artist, title) in vec![
-            (String::new(), String::new()),
-            (String::from("L'artist"), String::new()),
-            (String::new(), String::from("Le Title")),
-        ] {
-            let meta = Metadata {
-                artist,
-                title,
-                ..Default::default()
-            };
-
-            assert_eq!(meta.get_title(), String::from("C* Music Player"))
-        }
-    }
-
-    #[test]
-    fn test_get_message_without_duration() {
+    fn test_get_message() {
         let meta = Metadata {
-            album: String::from("L'Album"),
-            status: String::from("paused"),
-            tracknumber: 1,
+            album: "L'album".to_string(),
+            ..Default::default()
+        };
+
+        assert_eq!(meta.get_message(), "L'album\n".to_string())
+    }
+
+    #[rstest]
+    #[case::no_track_or_disc(0, 0, "")]
+    #[case::disc_only(1, 0, "")]
+    #[case::track_only(0, 69, "track 69")]
+    #[case::track_and_disc(42, 69, "disc 42, track 69")]
+    fn test_get_message_with_track(
+        #[case] discnumber: u8,
+        #[case] tracknumber: u8,
+        #[case] expected: String,
+    ) {
+        let meta = Metadata {
+            tracknumber,
+            discnumber,
+            ..Default::default()
+        };
+
+        assert_eq!(meta.get_message(), format!("\n{}", expected))
+    }
+
+    #[rstest]
+    #[case::no_duration_or_position(0, 0, "")]
+    #[case::position_only(1, 0, "")]
+    #[case::duration_only(0, 69, ", 01:09")]
+    #[case::position_and_duration(42, 69, ", 00:42 / 01:09")]
+    fn test_get_message_with_duration(
+        #[case] position: u32,
+        #[case] duration: u32,
+        #[case] expected: String,
+    ) {
+        let meta = Metadata {
+            position,
+            duration,
+            ..Default::default()
+        };
+
+        assert_eq!(meta.get_message(), format!("\n{}", expected))
+    }
+
+    #[rstest]
+    #[case("playing", "")]
+    #[case("paused", " [Paused]")]
+    #[case("stopped", " [Stopped]")]
+    #[case("whatever", "")]
+    #[case("", "")]
+    fn test_get_message_with_status(#[case] status: String, #[case] expected: String) {
+        let meta = Metadata {
+            status,
+            ..Default::default()
+        };
+
+        assert_eq!(meta.get_message(), format!("{}\n", expected))
+    }
+
+    #[test]
+    fn test_get_message_full() {
+        let meta = Metadata {
+            album: "Album".to_string(),
+            tracknumber: 2,
+            discnumber: 1,
+            position: 14,
+            duration: 123,
+            status: "stopped".to_string(),
             ..Default::default()
         };
 
         assert_eq!(
             meta.get_message(),
-            String::from("L'Album [Paused]\ntrack 1")
+            String::from("Album [Stopped]\ndisc 1, track 2, 00:14 / 02:03")
         )
     }
 
-    #[test]
-    fn test_get_message_with_duration() {
+    #[rstest]
+    #[case("playing", "")]
+    #[case("paused", " [Paused]")]
+    #[case("stopped", " [Stopped]")]
+    #[case("invalid-status", "")]
+    #[case("", "")]
+    fn test_get_status(#[case] status: String, #[case] expected: String) {
         let meta = Metadata {
-            album: String::from("L'Album"),
-            status: String::from("playing"),
-            tracknumber: 2,
-            duration: 123,
+            status,
             ..Default::default()
         };
 
-        assert_eq!(meta.get_message(), String::from("L'Album\ntrack 2, 02:03"))
+        assert_eq!(meta.get_status(), expected);
+    }
+
+    #[rstest]
+    #[case(0, 0, "")]
+    #[case(3, 0, "")]
+    #[case(0, 1, "track 1")]
+    #[case(0, 2, "track 2")]
+    #[case(1, 2, "disc 1, track 2")]
+    #[case(3, 3, "disc 3, track 3")]
+    fn test_get_track(#[case] discnumber: u8, #[case] tracknumber: u8, #[case] expected: String) {
+        let meta = Metadata {
+            tracknumber,
+            discnumber,
+            ..Default::default()
+        };
+
+        assert_eq!(meta.get_track(), expected);
+    }
+
+    #[rstest]
+    #[case(0, 0, None)]
+    #[case(0, 60, Some("01:00"))]
+    #[case(58, 0, None)]
+    #[case(58, 60, Some("00:58 / 01:00"))]
+    fn test_get_duration(
+        #[case] position: u32,
+        #[case] duration: u32,
+        #[case] expected: Option<&str>,
+    ) {
+        let meta = Metadata {
+            duration,
+            position,
+            ..Default::default()
+        };
+
+        assert_eq!(meta.get_duration(), expected.map(|e| e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod test_format_time {
+    use super::format_time;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(0, "00:00")]
+    #[case(1, "00:01")]
+    #[case(59, "00:59")]
+    #[case(60, "01:00")]
+    #[case(61, "01:01")]
+    #[case(3600, "01:00:00")]
+    fn test_format_only_seconds(#[case] sec: u32, #[case] expected: String) {
+        assert_eq!(format_time(sec), expected);
+    }
+}
+
+#[cfg(test)]
+mod test_parse {
+    use super::{parse, Metadata};
+
+    #[test]
+    fn test_parse() {
+        let data = "status stopped
+file /music/artist/album/song.flac
+duration 258
+position 123
+tag genre Neo Classical Fusion
+tag date 1824
+tag albumartist Various Artists
+tag artist Metallideth
+tag album Rust in Puppets
+tag title Orgasmatron
+tag tracknumber 69
+tag discnumber 42";
+
+        let expected = Metadata {
+            file: "/music/artist/album/song.flac".to_string(),
+            artist: "Metallideth".to_string(),
+            album: "Rust in Puppets".to_string(),
+            title: "Orgasmatron".to_string(),
+            tracknumber: 69,
+            discnumber: 42,
+            date: "1824".to_string(),
+            duration: 258,
+            position: 123,
+            status: "stopped".to_string(),
+        };
+
+        assert_eq!(parse(data), expected);
     }
 }
