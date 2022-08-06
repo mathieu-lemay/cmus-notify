@@ -15,7 +15,7 @@ set status_display_program=/path/to/cmus-notify
 ```
 
 ### Covers
-cmus-notify will use check for a file named cover.jpg or cover.png in the same folder than the
+cmus-notify will use check for a file named cover.jpg or cover.png in the same folder as the
 currently playing file.
 
 ### Example
