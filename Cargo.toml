@@ -5,8 +5,8 @@ authors = ["Mathieu Lemay <acidrain1@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-dirs = "4.0"
-notify-rust = "^4.0"
+dirs = "5.0"
+notify-rust = "4.0"
 
 [dev-dependencies]
-rstest = "0.15.0"
+rstest = "0.17"
