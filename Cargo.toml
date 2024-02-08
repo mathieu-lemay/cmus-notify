@@ -2,7 +2,7 @@
 name = "cmus-notify"
 version = "0.9.3"
 authors = ["Mathieu Lemay <acidrain1@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 dirs = "5.0"
