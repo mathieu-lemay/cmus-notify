@@ -9,4 +9,4 @@ dirs = "5.0"
 notify-rust = "4.0"
 
 [dev-dependencies]
-rstest = "0.17"
+rstest = "0.23"

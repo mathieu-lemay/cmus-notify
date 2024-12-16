@@ -175,11 +175,10 @@ fn parse(data: &str) -> Metadata {
 
 fn notify(title: &str, msg: &str, cover: Option<PathBuf>) {
     let icon = if cover.is_some() {
-        if let Some(c) = cover.as_ref().and_then(|c| c.to_str()) {
-            c
-        } else {
-            "applications-multimedia"
-        }
+        cover
+            .as_ref()
+            .and_then(|c| c.to_str())
+            .unwrap_or("applications-multimedia")
     } else {
         "applications-multimedia"
     };
